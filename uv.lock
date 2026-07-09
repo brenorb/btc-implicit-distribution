@@ -1,0 +1,15 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[options]
+exclude-newer = "2026-07-02T03:06:57.224163Z"
+exclude-newer-span = "P7D"
+
+[options.exclude-newer-package]
+docs2epub = false
+
+[[package]]
+name = "btc-implicit-distribution"
+version = "0.1.0"
+source = { virtual = "." }

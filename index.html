@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BTC Implicit Distribution</title>
+    <meta
+      name="description"
+      content="Distribuicao implicita de preco do bitcoin extraida do mercado de opcoes da Deribit."
+    />
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.27.7/full/pyodide.js" defer></script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Mercado de opcoes BTC / Deribit / Pyodide</p>
+          <h1>Veja o preco futuro que o mercado esta pagando para acreditar.</h1>
+          <p class="lede">
+            Selecione um vencimento, ajuste a limpeza do livro e leia a distribuicao implicita
+            diretamente no navegador, sem backend.
+          </p>
+        </div>
+        <div class="hero-note">
+          <span class="hero-note-label">Metodo</span>
+          <p>
+            Borboletas por diferenca finita, ajustes de preco em BTC para USD, interpolacao linear
+            de strikes faltantes e envelope com base em bid/ask.
+          </p>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="controls-panel">
+          <section class="panel-card controls-card">
+            <div class="section-head">
+              <h2>Parametros</h2>
+              <button id="refresh-button" class="ghost-button" type="button">Atualizar dados</button>
+            </div>
+
+            <label class="field">
+              <span>Vencimento</span>
+              <select id="expiry-select"></select>
+            </label>
+
+            <label class="field">
+              <span>Fonte do calculo</span>
+              <select id="source-select">
+                <option value="auto">Auto: puts abaixo / calls acima</option>
+                <option value="average">Media entre puts e calls</option>
+                <option value="calls">Somente calls</option>
+                <option value="puts">Somente puts</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <div class="field-row">
+                <span>Suavizacao</span>
+                <output id="smoothing-output">3</output>
+              </div>
+              <input id="smoothing-range" type="range" min="1" max="9" step="2" value="3" />
+            </label>
+
+            <label class="field">
+              <div class="field-row">
+                <span>Faixa ao redor do spot</span>
+                <output id="range-output">65% a 155%</output>
+              </div>
+              <input id="min-range" type="range" min="30" max="95" step="5" value="65" />
+              <input id="max-range" type="range" min="105" max="250" step="5" value="155" />
+            </label>
+
+            <label class="check-field">
+              <input id="clip-checkbox" type="checkbox" checked />
+              <span>Zerar probabilidades negativas antes da normalizacao</span>
+            </label>
+
+            <label class="check-field">
+              <input id="envelope-checkbox" type="checkbox" checked />
+              <span>Mostrar envelope de bid/ask</span>
+            </label>
+          </section>
+
+          <section class="panel-card explain-card">
+            <h2>Como ler</h2>
+            <ul>
+              <li>Linha principal: estimativa central da distribuicao implicita.</li>
+              <li>Faixa sombreada: variacao induzida pelo spread bid/ask.</li>
+              <li>Spot e media implicita aparecem como referencias no grafico.</li>
+            </ul>
+            <p class="tiny-note">
+              Isto e uma distribuicao neutra ao risco derivada do preco de opcoes, nao uma promessa
+              de mercado.
+            </p>
+          </section>
+        </aside>
+
+        <section class="content-panel">
+          <div class="metrics-grid">
+            <article class="metric-card">
+              <span class="metric-label">Spot</span>
+              <strong id="spot-value">-</strong>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Media implicita</span>
+              <strong id="mean-value">-</strong>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Mediana</span>
+              <strong id="median-value">-</strong>
+            </article>
+            <article class="metric-card">
+              <span class="metric-label">Prob. acima do spot</span>
+              <strong id="above-spot-value">-</strong>
+            </article>
+          </div>
+
+          <section class="panel-card chart-card">
+            <div class="section-head">
+              <div>
+                <p class="kicker">Distribuicao implicita</p>
+                <h2 id="chart-title">Carregando...</h2>
+              </div>
+              <div class="status-stack">
+                <span id="status-pill" class="status-pill loading">Inicializando</span>
+                <span id="quality-pill" class="quality-pill">Qualidade indisponivel</span>
+              </div>
+            </div>
+
+            <div id="chart" class="chart-frame" aria-label="Grafico da distribuicao implicita"></div>
+
+            <div class="probability-strip">
+              <div class="strip-track"></div>
+              <div id="strip-markers" class="strip-markers"></div>
+            </div>
+
+            <div class="band-row">
+              <div class="band-chip">
+                <span>Faixa 10-90</span>
+                <strong id="band-10-90">-</strong>
+              </div>
+              <div class="band-chip">
+                <span>Faixa 25-75</span>
+                <strong id="band-25-75">-</strong>
+              </div>
+              <div class="band-chip">
+                <span>Retorno anualizado</span>
+                <strong id="annualized-value">-</strong>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <template id="strip-marker-template">
+      <div class="strip-marker">
+        <span class="strip-line"></span>
+        <span class="strip-label"></span>
+      </div>
+    </template>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
+

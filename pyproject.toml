@@ -1,0 +1,6 @@
+[project]
+name = "btc-implicit-distribution"
+version = "0.1.0"
+description = "Static Pyodide BTC implied distribution explorer"
+requires-python = ">=3.11"
+
