@@ -31,6 +31,19 @@ cd /Users/breno/Documents/code/PROJECTS/btc-implicit-distribution
 uv run --with pytest pytest
 ```
 
+## Cache behavior
+
+- The client stores the latest Deribit response in `localStorage`
+- Fresh cache is reused for 5 minutes
+- The `Atualizar dados` button bypasses the cache and refreshes immediately
+- If Deribit is temporarily unavailable, the UI falls back to the stale local cache instead of breaking
+
+## GitHub Pages
+
+- Publish target: `btc-implicit-distribution.brenorb.com`
+- Pages source: `main` branch, root path
+- Static assets live at the repository root, so no build step is required for deployment
+
 ## Notes
 
 - The chart is a risk-neutral market-implied distribution, not an oracle.
