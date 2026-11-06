@@ -6,8 +6,9 @@ A static GitHub Pages explorer for the market-implied BTC price distribution der
 
 - Fetches live BTC option summaries from the public Deribit API
 - Uses local browser cache with a short TTL to avoid hammering the public Deribit API
-- Rebuilds the strike grid with linear interpolation when needed
-- Estimates a risk-neutral price distribution from finite-difference butterflies
+- Preserves quoted strikes and interpolates linearly between neighboring quotes when needed
+- Estimates a risk-neutral price distribution from butterflies weighted by the actual gaps between strikes
+- Offers calls-only and puts-only distributions using only points from the selected side
 - Runs the Python calculation in the browser with Pyodide
 - Renders a friendly interface for expiry selection and parameter tuning
 

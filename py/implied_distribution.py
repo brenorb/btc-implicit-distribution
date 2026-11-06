@@ -114,13 +114,6 @@ def _quantile(points: list[dict], probability: float) -> float:
     return points[-1]["strike"]
 
 
-def _select_existing(rows: list[OptionRow], strike: int) -> OptionRow | None:
-    for row in rows:
-        if row.strike == strike:
-            return row
-    return None
-
-
 def _interpolate_row(left: OptionRow, right: OptionRow, strike: int, mean_underlying: float) -> dict:
     weight = (strike - left.strike) / (right.strike - left.strike)
     return {
@@ -134,37 +127,34 @@ def _interpolate_row(left: OptionRow, right: OptionRow, strike: int, mean_underl
 
 def _rebuild_side_grid(rows: Iterable[OptionRow]) -> dict:
     sorted_rows = sorted(rows, key=lambda row: row.strike)
-    if len(sorted_rows) < 3:
-        raise ValueError("Not enough option rows to estimate a distribution.")
+    quotes_by_strike: dict[int, OptionRow] = {}
+    for row in sorted_rows:
+        quotes_by_strike.setdefault(row.strike, row)
+    quoted_rows = list(quotes_by_strike.values())
+    if len(quoted_rows) < 3:
+        raise ValueError("Not enough distinct strikes to estimate a distribution.")
 
-    strikes = [row.strike for row in sorted_rows]
-    diffs = [right - left for left, right in zip(strikes, strikes[1:]) if right > left]
-    if not diffs:
-        raise ValueError("Could not infer strike spacing from the option chain.")
-
-    step = min(diffs)
-    start = strikes[0]
-    end = strikes[-1]
+    step = min(right.strike - left.strike for left, right in zip(quoted_rows, quoted_rows[1:]))
     mean_underlying = fmean([row.underlying_price for row in sorted_rows if row.underlying_price > 0])
 
     full_rows: list[dict] = []
-    for strike in range(start, end + step, step):
-        existing = _select_existing(sorted_rows, strike)
-        if existing:
-            full_rows.append(
-                {
-                    "strike": existing.strike,
-                    "bid": existing.bid,
-                    "ask": existing.ask,
-                    "underlying_price": mean_underlying,
-                    "real": True,
-                }
+    previous = None
+    for row in quoted_rows:
+        if previous is not None:
+            full_rows.extend(
+                _interpolate_row(previous, row, strike, mean_underlying)
+                for strike in range(previous.strike + step, row.strike, step)
             )
-            continue
-
-        left = max((row for row in sorted_rows if row.strike < strike), key=lambda row: row.strike)
-        right = min((row for row in sorted_rows if row.strike > strike), key=lambda row: row.strike)
-        full_rows.append(_interpolate_row(left, right, strike, mean_underlying))
+        full_rows.append(
+            {
+                "strike": row.strike,
+                "bid": row.bid,
+                "ask": row.ask,
+                "underlying_price": mean_underlying,
+                "real": True,
+            }
+        )
+        previous = row
 
     return {
         "step": step,
@@ -177,7 +167,6 @@ def _rebuild_side_grid(rows: Iterable[OptionRow]) -> dict:
 
 def _butterfly_surface(grid: dict) -> list[dict]:
     rows = grid["rows"]
-    step = grid["step"]
     points: list[dict] = []
     for index in range(1, len(rows) - 1):
         previous_row = rows[index - 1]
@@ -188,13 +177,18 @@ def _butterfly_surface(grid: dict) -> list[dict]:
         current_mid = (current_row["bid"] + current_row["ask"]) / 2
         next_mid = (next_row["bid"] + next_row["ask"]) / 2
 
-        center = (previous_mid - (2 * current_mid) + next_mid) * current_row["underlying_price"] / step
+        # The mass is the jump between the adjacent quote slopes.
+        left_weight = current_row["underlying_price"] / (current_row["strike"] - previous_row["strike"])
+        right_weight = current_row["underlying_price"] / (next_row["strike"] - current_row["strike"])
+        center = (next_mid - current_mid) * right_weight - (current_mid - previous_mid) * left_weight
         long_execution = (
-            previous_row["ask"] - (2 * current_row["bid"]) + next_row["ask"]
-        ) * current_row["underlying_price"] / step
+            (next_row["ask"] - current_row["bid"]) * right_weight
+            - (current_row["bid"] - previous_row["ask"]) * left_weight
+        )
         short_execution = (
-            (-previous_row["bid"]) + (2 * current_row["ask"]) - next_row["bid"]
-        ) * current_row["underlying_price"] / step
+            (current_row["ask"] - next_row["bid"]) * right_weight
+            + (current_row["ask"] - previous_row["bid"]) * left_weight
+        )
 
         points.append(
             {
@@ -228,11 +222,10 @@ def _blend_surfaces(call_surface: list[dict], put_surface: list[dict], spot: flo
         call_point = calls.get(strike)
         put_point = puts.get(strike)
 
-        if source == "calls" and call_point:
-            blended.append(merge([call_point], "calls"))
-            continue
-        if source == "puts" and put_point:
-            blended.append(merge([put_point], "puts"))
+        if source in ("calls", "puts"):
+            selected_point = call_point if source == "calls" else put_point
+            if selected_point:
+                blended.append(merge([selected_point], source))
             continue
         if source == "average":
             candidates = [point for point in (put_point, call_point) if point]
